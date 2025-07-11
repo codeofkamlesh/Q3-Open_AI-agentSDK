@@ -3,11 +3,11 @@ import asyncio
 from dotenv import load_dotenv
 from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI, RunConfig, function_tool
 
-# ✅ Load .env
+
 load_dotenv()
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
-# ✅ Gemini client
+
 external_client = AsyncOpenAI(
     api_key=gemini_api_key,
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -18,14 +18,14 @@ model = OpenAIChatCompletionsModel(
     openai_client=external_client
 )
 
-# ✅ RunConfig
+
 config = RunConfig(
     model=model,
     model_provider=external_client,
     tracing_disabled=True
 )
 
-# ✅ Tools
+
 @function_tool
 def get_career_roadmap(career_name: str) -> str:
     roadmap = {
@@ -54,7 +54,7 @@ def get_job_roles(career_name: str) -> str:
     else:
         return f"Sorry, job roles nahi mile '{career_name.title()}' ke liye."
 
-# ✅ Agents
+
 career_agent = Agent(
     name="CareerAgent",
     instructions="User se interest lo aur career options suggest karo."
@@ -70,7 +70,7 @@ job_agent = Agent(
     instructions="Career name mile to get_job_roles tool se job titles do."
 )
 
-# ✅ Career interest mapping
+
 interest_map = {
     "technology": ["Software Developer", "AI Engineer"],
     "business": ["Marketing Manager", "Business Analyst"],
@@ -83,7 +83,7 @@ def get_career_from_interest(text: str):
             return f"Aap ke liye career options hain: {', '.join(careers)}"
     return None
 
-# ✅ CLI App
+
 async def main():
     print("🎓 Career Mentor Agent (CLI Version)")
     print("Type 'exit' to quit.\n")
@@ -129,6 +129,6 @@ async def main():
         )
         print("CareerAgent:", fallback.final_output)
 
-# ✅ Start App
+
 if __name__ == "__main__":
     asyncio.run(main())
