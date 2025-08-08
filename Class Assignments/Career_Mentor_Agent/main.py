@@ -3,10 +3,8 @@ import asyncio
 from dotenv import load_dotenv
 from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI, RunConfig, function_tool
 
-
 load_dotenv()
 gemini_api_key = os.getenv("GEMINI_API_KEY")
-
 
 external_client = AsyncOpenAI(
     api_key=gemini_api_key,
@@ -18,117 +16,92 @@ model = OpenAIChatCompletionsModel(
     openai_client=external_client
 )
 
-
 config = RunConfig(
     model=model,
     model_provider=external_client,
     tracing_disabled=True
 )
 
+# @function_tool
+# def get_career_roadmap(field: str) -> str:
 
-@function_tool
-def get_career_roadmap(career_name: str) -> str:
-    roadmap = {
-        "software developer": ["Python", "Git", "APIs"],
-        "marketing manager": ["Communication", "SEO", "Data Analysis"],
-        "graphic designer": ["Photoshop", "Illustrator", "Creativity"]
-    }
-    name = career_name.lower()
-    if name in roadmap:
-        skills = roadmap[name]
-        return f"{career_name.title()} banne ke liye yeh skills chahiye: {', '.join(skills)}"
-    else:
-        return f"Sorry, roadmap nahi mili '{career_name.title()}' ke liye."
-
-@function_tool
-def get_job_roles(career_name: str) -> str:
-    jobs = {
-        "software developer": ["Junior Developer", "Backend Engineer"],
-        "marketing manager": ["SEO Specialist", "Brand Manager"],
-        "graphic designer": ["Logo Designer", "UI Designer"]
-    }
-    name = career_name.lower()
-    if name in jobs:
-        roles = jobs[name]
-        return f"{career_name.title()} ke liye yeh job roles mil sakte hain: {', '.join(roles)}"
-    else:
-        return f"Sorry, job roles nahi mile '{career_name.title()}' ke liye."
-
+#         prompt = (
+#         f"You are a career skill planner. The chosen field is: {field}.\n"
+#         "List the essential skills (technical and soft) needed to succeed in this field, "
+#         "and suggest a short step-by-step learning plan."
+#     )
+#         return model.create_response(prompt)
 
 career_agent = Agent(
     name="CareerAgent",
-    instructions="User se interest lo aur career options suggest karo."
+    instructions="You suggest suitable career fields based on the user's interests.",
+    model=model
 )
 
 skill_agent = Agent(
     name="SkillAgent",
-    instructions="Career name mile to get_career_roadmap tool se skills do."
+    instructions="You generate a skill roadmap for a chosen career field.",
+    model=model
+    # tools=[get_career_roadmap]
 )
 
 job_agent = Agent(
     name="JobAgent",
-    instructions="Career name mile to get_job_roles tool se job titles do."
+    instructions="You provide job titles and brief descriptions for a given career field.",
+    model=model
 )
 
 
-interest_map = {
-    "technology": ["Software Developer", "AI Engineer"],
-    "business": ["Marketing Manager", "Business Analyst"],
-    "design": ["Graphic Designer", "UI/UX Designer"]
-}
+orchestrator_agent = Agent(
+    name="CareerOrchestrator",
+    instructions=(
+        "You are the Career Mentor Orchestrator. Your job is to decide which specialist agent should handle the request."
+         "You use the tools given to you according to the given input of the user."
+         "You never your own, you always use the provided tools."
+         "if the user input ask anything unrelated to the agents work then show this message:"
+         "I can only answer you carrer related queries"
+    ),
+    tools=[
+        career_agent.as_tool(
+            tool_name="carrer_agent",
+            tool_description="suggest suitable career fields based on the user's interests.",
+        ),
 
-def get_career_from_interest(text: str):
-    for interest, careers in interest_map.items():
-        if interest in text.lower():
-            return f"Aap ke liye career options hain: {', '.join(careers)}"
-    return None
+        # get_career_roadmap,
+        skill_agent.as_tool(
+            tool_name="skill_agent",
+            tool_description="generate a skill roadmap for a chosen career field from carrer_agent's suggestion",
+        ),
+
+        job_agent.as_tool(
+            tool_name="job_agent",
+            tool_description="provide job titles and brief descriptions for a given career field",
+        ),
+
+    ]
+)
 
 
 async def main():
-    print("🎓 Career Mentor Agent (CLI Version)")
+    print("\n")
+    print("Hi ! Iam a Career Mentor Agent")
+    print("\n")
+    print("In which field would you like make your carrer, tell me your interest first?")
     print("Type 'exit' to quit.\n")
-    print("In which field you want to make your career? ")
+
     while True:
-        user_input = input("You: ").strip().lower()
-        if user_input == "exit":
+        user_input = input("You: ").strip()
+        if user_input.lower() == "exit":
             break
 
-        # Step 1: Suggest careers from interest
-        career_suggestion = get_career_from_interest(user_input)
-        if career_suggestion:
-            print("CareerAgent:", career_suggestion)
-            continue
 
-        # Step 2: Handoff if user types known career
-        all_careers = ["software developer", "marketing manager", "graphic designer"]
-        if user_input in all_careers:
-            # SkillAgent
-            skills = await Runner.run(
-                skill_agent,
-                input=user_input,
-                run_config=config,
-                tools=[get_career_roadmap]
-            )
-            print("SkillAgent:", skills.final_output)
-
-            # JobAgent
-            jobs = await Runner.run(
-                job_agent,
-                input=user_input,
-                run_config=config,
-                tools=[get_job_roles]
-            )
-            print("JobAgent:", jobs.final_output)
-            continue
-
-        # Step 3: Fallback (CareerAgent via LLM)
-        fallback = await Runner.run(
-            career_agent,
+        result = await Runner.run(
+            orchestrator_agent,
             input=user_input,
             run_config=config
         )
-        print("CareerAgent:", fallback.final_output)
 
+        print("Output:", result.final_output)
 
 if __name__ == "__main__":
     asyncio.run(main())
