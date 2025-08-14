@@ -22,15 +22,15 @@ config = RunConfig(
     tracing_disabled=True
 )
 
-# @function_tool
-# def get_career_roadmap(field: str) -> str:
+@function_tool
+def get_career_roadmap(field: str) -> str:
 
-#         prompt = (
-#         f"You are a career skill planner. The chosen field is: {field}.\n"
-#         "List the essential skills (technical and soft) needed to succeed in this field, "
-#         "and suggest a short step-by-step learning plan."
-#     )
-#         return model.create_response(prompt)
+        roadmaps = {
+        "graphic designing": "start with photoshop, illustrator, canva.",
+        "web development": "you should first start with HTML, CSS, JAVASCRIPT, then React.js or Next.js.",
+        "Video Editing":"you should satrt with Filmora, premier pro , then after effect for Animation."
+        }
+        return roadmaps.get(field.lower(), f"No roadmap available for {field}.")
 
 career_agent = Agent(
     name="CareerAgent",
@@ -42,7 +42,7 @@ skill_agent = Agent(
     name="SkillAgent",
     instructions="You generate a skill roadmap for a chosen career field.",
     model=model
-    # tools=[get_career_roadmap]
+
 )
 
 job_agent = Agent(
@@ -55,30 +55,15 @@ job_agent = Agent(
 orchestrator_agent = Agent(
     name="CareerOrchestrator",
     instructions=(
-        "You are the Career Mentor Orchestrator. Your job is to decide which specialist agent should handle the request."
+        "You are the Career Mentor Orchestrator. Your job is to handoff the task to specialist agent should handle the request."
          "You use the tools given to you according to the given input of the user."
-         "You never your own, you always use the provided tools."
+         "if user is asking about the roadmap of field other than mentioned in tool then take resuls from the model."
          "if the user input ask anything unrelated to the agents work then show this message:"
          "I can only answer you carrer related queries"
     ),
-    tools=[
-        career_agent.as_tool(
-            tool_name="carrer_agent",
-            tool_description="suggest suitable career fields based on the user's interests.",
-        ),
+    tools=[get_career_roadmap],
+   
 
-        # get_career_roadmap,
-        skill_agent.as_tool(
-            tool_name="skill_agent",
-            tool_description="generate a skill roadmap for a chosen career field from carrer_agent's suggestion",
-        ),
-
-        job_agent.as_tool(
-            tool_name="job_agent",
-            tool_description="provide job titles and brief descriptions for a given career field",
-        ),
-
-    ]
 )
 
 
