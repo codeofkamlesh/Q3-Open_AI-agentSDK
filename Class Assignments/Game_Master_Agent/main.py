@@ -1,5 +1,6 @@
 import os
 import asyncio
+import random
 from dotenv import load_dotenv
 from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI, RunConfig, function_tool
 
@@ -24,39 +25,70 @@ config = RunConfig(
     tracing_disabled=True
 )
 
+@function_tool
+async def roll_dice(sides: int = 6) -> int:
+    """Roll a dice with the given number of sides."""
+    return random.randint(1, sides)
 
 @function_tool
-def get_next_move(user_action: str) -> str:
-    if "cave" in user_action.lower():
-        return "You find a dark tunnel. You can go left toward glowing mushrooms or right toward dripping water."
-    elif "castle" in user_action.lower():
-        return "A dragon blocks the main gate. You can fight, hide, or run back."
-    elif "forest" in user_action.lower():
-        return "You see two paths — one lit with lanterns, the other covered in fog."
-    else:
-        return "You wander with no clear path. Try exploring a cave, castle, or forest."
+async def generate_event(context: str) -> str:
+    
+    events = {
+        "story": [
+            "You arrive at the gates of an ancient city.",
+            "A mysterious traveler offers you a map.",
+            "The forest whispers secrets in the wind."
+        ],
+        "combat": [
+            "A wild goblin jumps from the bushes!",
+            "A fierce dragon blocks your path!",
+            "Bandits surround you with drawn swords."
+        ],
+        "item": [
+            "You find a glowing sword in a chest.",
+            "A potion shimmers on a dusty shelf.",
+            "A golden key lies hidden under rubble."
+        ]
+    }
+    return random.choice(events.get(context, ["Nothing happens..."]))
 
 
-@function_tool
-def generate_loot(area: str) -> str:
-    if "cave" in area.lower():
-        return "You find a glowing sword and 20 gold coins!"
-    elif "castle" in area.lower():
-        return "You discover a secret scroll of fire and a dragon scale shield!"
-    elif "forest" in area.lower():
-        return "You collect healing herbs and a magical bow."
-    else:
-        return "You find a mysterious rock that hums softly."
+
+narrator_agent = Agent(
+    name="NarratorAgent",
+    instructions="You narrate the story progression in the fantasy adventure.",
+
+)
+
+monster_agent = Agent(
+    name="MonsterAgent",
+    instructions="You handle combat encounters, rolling dice for attack/defense.",
+
+)
+
+item_agent = Agent(
+    name="ItemAgent",
+    instructions="You handle item discoveries and inventory rewards.",
+
+)
 
 
-game_agent = Agent(
+game_master_agent = Agent(
     name="GameMasterAgent",
-    instructions="You are the narrator of a fantasy game. Respond to user's moves using tools to guide the story.",
-    tools=[get_next_move, generate_loot]
+    instructions=(
+        "You are the Game Master of a fantasy adventure. "
+        "When the user requests story progression, use NarratorAgent. "
+        "When it's combat, use MonsterAgent. "
+        "When it's about items, use ItemAgent. "
+        "If the request is unrelated to the game, say: "
+        "'I am a Game Master Agent. I run a fantasy text-based adventure game.'"
+    ),
+    tools=[roll_dice, generate_event]
 )
 
 
 async def main():
+    print("\n")
     print("🎮 Welcome to Fantasy Adventure Game!")
     print("Type 'exit' to quit.\n")
 
@@ -67,20 +99,20 @@ async def main():
 
 
         next_move = await Runner.run(
-            game_agent,
+            game_master_agent,
             input=user_input,
             run_config=config
 
         )
-        print("📜 GameMaster:", next_move.final_output)
+        print("GameMaster:", next_move.final_output)
 
 
         loot = await Runner.run(
-            game_agent,
+            game_master_agent,
             input=user_input,
             run_config=config
         )
-        
+
 
 
 if __name__ == "__main__":
