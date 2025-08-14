@@ -3,10 +3,8 @@ import asyncio
 from dotenv import load_dotenv
 from agents import Agent, Runner, OpenAIChatCompletionsModel, AsyncOpenAI, RunConfig, function_tool
 
-
 load_dotenv()
 gemini_api_key = os.getenv("GEMINI_API_KEY")
-
 
 external_client = AsyncOpenAI(
     api_key=gemini_api_key,
@@ -24,80 +22,80 @@ config = RunConfig(
     tracing_disabled=True
 )
 
-
+# ------------------- TOOLS -------------------
 @function_tool
-def get_travel_plan(user_interest: str) -> str:
+def get_flights(user_interest: str) -> str:
     interest = user_interest.lower()
     if "adventure" in interest:
-        return "🏔️ Recommended: Skardu or Hunza. Great for hiking, nature, and mountains."
+        return "🏔️ Recommended: Thailand or Baku. Great for hiking, nature, and mountains."
     elif "relax" in interest or "beach" in interest:
-        return "🏖️ Recommended: Gwadar or Clifton Beach for peaceful seaside views."
+        return "🏖️ Recommended: Switzerland or New York for peaceful seaside views."
     elif "budget" in interest:
-        return "💸 Budget trip: Visit Murree or Swat — affordable and beautiful!"
+        return "💸 Budget trip: Skardu or Swat — affordable and beautiful!"
     else:
         return "🤔 Please mention your travel interest (e.g., adventure, beach, budget)."
 
-
 @function_tool
-def get_packing_list(destination: str) -> str:
+def suggest_hotels(destination: str) -> str:
     dest = destination.lower()
-    if "skardu" in dest or "hunza" in dest:
-        return "🧳 Packing List: Jacket, hiking boots, sunglasses, water bottle."
-    elif "beach" in dest or "gwadar" in dest:
-        return "🧳 Packing List: Sunscreen, hat, swimwear, flip-flops."
-    elif "murree" in dest or "swat" in dest:
-        return "🧳 Packing List: Warm clothes, camera, snacks."
+    if "thailand" in dest or "baku" in dest:
+        return "🏨 Suggested Hotels: Mountain View Resort, Adventure Lodge."
+    elif "switzerland" in dest or "new york" in dest:
+        return "🏨 Suggested Hotels: Beach Paradise Hotel, Ocean Breeze Inn."
+    elif "skardu" in dest or "swat" in dest:
+        return "🏨 Suggested Hotels: Valley View Hotel, Snow Peak Inn."
     else:
         return "📦 Packing List: Travel basics - clothes, ID card, cash."
 
-
-travel_agent = Agent(
-    name="TravelAgent",
-    instructions="You are a Travel Designer. Based on user's interest or budget, suggest travel plans and packing list.",
-    tools=[get_travel_plan, get_packing_list]
+# ------------------- AGENTS -------------------
+destination_agent = Agent(
+    name="DestinationAgent",
+    instructions="Suggest travel destinations based on mood or interests."
 )
 
+booking_agent = Agent(
+    name="BookingAgent",
+    instructions="Provide flight and hotel booking information."
+)
 
+explore_agent = Agent(
+    name="ExploreAgent",
+    instructions="Suggest attractions and food in the destination."
+)
+
+orchestrator_agent = Agent(
+    name="TravelDesignerOrchestrator",
+    instructions=(
+        "Coordinate between agents to design a travel plan. "
+        "If user asks for destinations, use DestinationAgent. "
+        "If booking info, use BookingAgent. "
+        "If attractions/food, use ExploreAgent. "
+        "First try to use the tools. If the tools don't have related info, use the other relevant agents. "
+        "If query unrelated to travel, reply: 'I am a Travel Designer Agent. "
+        "I can suggest destinations, book flights/hotels, and recommend attractions.'"
+    ),
+    tools=[get_flights, suggest_hotels],
+    handoffs=[destination_agent, booking_agent, explore_agent]
+)
+
+# ------------------- MAIN -------------------
 async def main():
-    print("🧭 AI Travel Designer (CLI Version)")
+    print("\n")
+    print("Iam AI Travel Designer Agent, Which type of trip do you like to make?")
     print("Type 'exit' to quit.\n")
-    print("For which place would you like to make a trip?")
+
     while True:
-        user_input = input("You: ").strip().lower()
-        if user_input == "exit":
+        user_input = input("You: ").strip()
+        if user_input.lower() == "exit":
             break
 
-
-        if "travel" in user_input or "trip" in user_input or "adventure" in user_input or "budget" in user_input:
-            plan = await Runner.run(
-                travel_agent,
-                input=user_input,
-                run_config=config,
-
-            )
-            print("🗺️ Travel Suggestion:", plan.final_output)
-            continue
-
-
-        destinations = ["skardu", "hunza", "gwadar", "beach", "murree", "swat"]
-        if any(dest in user_input for dest in destinations):
-            packing = await Runner.run(
-                travel_agent,
-                input=user_input,
-                run_config=config,
-
-            )
-            print("🎒 Packing List:", packing.final_output)
-            continue
-
-
-        fallback = await Runner.run(
-            travel_agent,
+        result = await Runner.run(
+            orchestrator_agent,
             input=user_input,
             run_config=config
         )
-        print("🤖 TravelAgent:", fallback.final_output)
 
+        print("Agent:", result.final_output)
 
 if __name__ == "__main__":
     asyncio.run(main())
